@@ -1,0 +1,34 @@
+SAFE PDF FORMATTER - WINDOWS
+
+1. Right-click the supplied ZIP and choose Extract All.
+2. Open the extracted SAFE PDF Formatter-Windows-AMD64 folder.
+3. Double-click SAFE PDF Formatter.exe.
+
+Keep the entire extracted folder together. The _internal folder contains the
+runtime needed by the app. No Python installation, Acrobat, account sign-in,
+or internet connection is needed to process documents.
+
+FIRST TEST
+Click Sample PDFs, then Preview selected. Use Previous and Next to review the
+four demonstration pages. These contain no scientific assessment data.
+
+YOUR DOCUMENTS
+Add plain PDFs, select the assessment year and release stage, and review the
+heading and region shown for each file. Use Edit selected details to add an
+unknown filename to the catalog. Choose a Save to folder you can write to,
+then click Process all PDFs. Results are saved in a new dated subfolder.
+Original PDFs are not modified.
+
+EDITING
+Open CSV opens the local config/chapters.csv for editing. Save it as UTF-8 CSV
+and click Reload. Layout settings changes spacing and typography. The catalog
+is an editable local snapshot; there is no automatic Google Sheets connection.
+
+PASSING IT ON
+Send the whole ZIP. Do not send just the EXE. Keep a separate copy of any
+customized chapter CSV and layout settings before replacing the app folder.
+
+This test release is unsigned. Managed Windows computers may require IT to
+approve it before it can run. Follow your organization's normal software policy.
+
+Read README.md for formatting conventions, accessibility limits, and details.

@@ -1,0 +1,23 @@
+{
+  "font": "Times-Italic",
+  "font_size": 10.0,
+  "minimum_header_font_size": 8.0,
+  "header_gap": 12.0,
+  "left_margin": 62.0,
+  "portrait_right_margin": 52.0,
+  "landscape_right_margin": 68.0,
+  "portrait_header_top_margin": 7.0,
+  "landscape_header_top_margin": 5.0,
+  "header_height": 18.0,
+  "header_baseline_above_rule": 5.0,
+  "header_rule_width": 1.0,
+  "footer_baseline": 28.0,
+  "page_number_baseline": 18.0,
+  "disclaimer_bottom": 10.0,
+  "disclaimer_height": 40.0,
+  "disclaimer_width": 498.0,
+  "disclaimer_font_size": 9.0,
+  "disclaimer_leading": 10.8,
+  "disclaimer_padding": 2.0,
+  "disclaimer_border_width": 1.0
+}

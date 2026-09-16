@@ -1,0 +1,66 @@
+name: Build standalone PDF formatter
+
+# Copy this project into a Git repository to use this optional workflow.
+# No repository is created and no application is published by these files.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Operating system to build
+        type: choice
+        required: true
+        default: Windows
+        options: [Windows, macOS, Both]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.platform == 'Windows' && '["windows-latest"]' || inputs.platform == 'macOS' && '["macos-latest"]' || '["windows-latest", "macos-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install -r requirements-build.txt
+      - name: Run checks
+        env:
+          SAFE_GUI_TEST: ${{ runner.os == 'Windows' && '1' || '0' }}
+        run: python -m unittest discover -s tests -v
+      - name: Build application
+        run: python -m PyInstaller --noconfirm --clean --workpath build/pyinstaller --distpath dist "SAFE PDF Formatter.spec"
+      - name: Assemble portable folder and ZIP
+        run: python scripts/package_release.py
+      - name: Verify standalone executable
+        if: runner.os != 'Windows'
+        run: python scripts/verify_build.py --from-zip
+      - name: Verify Windows ZIP and bundled GUI
+        if: runner.os == 'Windows'
+        run: python scripts/verify_build.py --gui --from-zip
+      - name: Save application download
+        uses: actions/upload-artifact@v7
+        with:
+          name: SAFE-PDF-Formatter-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            release/*.zip
+            release/SHA256SUMS-*.txt
+          if-no-files-found: error
+      - name: Save verification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: SAFE-PDF-Formatter-checks-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            build/frozen-self-test-*/self-test.json
+            build/frozen-self-test-*/verification.json
+            build/pyinstaller/SAFE PDF Formatter/warn-SAFE PDF Formatter.txt
+          if-no-files-found: warn
