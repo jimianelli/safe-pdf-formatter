@@ -161,15 +161,15 @@ def _artifact_start(drawing, subtype: str) -> None:
     drawing.addLiteral(f"/Artifact <</Type /Pagination /Subtype /{subtype}>> BDC")
 
 
-def _text_fits(text: str, font: str) -> None:
+def _text_fits(text: str, font: str, field: str = "Chapter heading") -> None:
     # Standard PDF fonts use WinAnsi; reject unsupported heading characters
     # rather than silently substituting boxes in a published document.
     try:
         text.encode("cp1252")
     except UnicodeEncodeError as exc:
-        raise ValueError(f"The heading contains '{text[exc.start:exc.end]}', which is not supported by the standard PDF font {font}. Use a supported character or a Latin-alphabet heading.") from exc
+        raise ValueError(f"{field} contains '{text[exc.start:exc.end]}', which is not supported by the standard PDF font {font}. Use a supported Latin-alphabet character.") from exc
     if any(ord(character) < 32 for character in text):
-        raise ValueError("Chapter headings must be a single line without control characters.")
+        raise ValueError(f"{field} must be a single line without control characters.")
 
 
 def _wrap_disclaimer(font: str, font_size: float, available: float) -> list[str]:
@@ -204,7 +204,9 @@ def _make_overlay(width, height, number, chapter, options, layout, warnings):
     drawing.setStrokeColorRGB(0, 0, 0)
     if options.headers_footers:
         rule_y = height - layout[f"{orientation}_header_top_margin"] - layout["header_height"]
-        if rule_y < max(layout["footer_baseline"], layout["disclaimer_bottom"] + layout["disclaimer_height"]) + size:
+        footer_top = (layout["disclaimer_bottom"] + layout["disclaimer_height"]
+                      if options.disclaimer and number == 1 else layout["footer_baseline"])
+        if rule_y < footer_top + size:
             raise ValueError(f"Page {number} is too short for the configured header and footer.")
         heading, label = chapter.heading, options.meeting_label
         combined = pdfmetrics.stringWidth(label, font, size) + pdfmetrics.stringWidth(heading, font, size)
@@ -222,7 +224,7 @@ def _make_overlay(width, height, number, chapter, options, layout, warnings):
         drawing.setLineWidth(layout["header_rule_width"])
         drawing.line(left, rule_y, right, rule_y)
         drawing.addLiteral("EMC")
-        if number != 1 or not options.is_draft:
+        if number != 1 or not options.disclaimer:
             footer = FOOTERS[chapter.region]
             if pdfmetrics.stringWidth(footer, font, size) > available:
                 raise ValueError(f"Page {number}: the regional footer does not fit the configured margins.")
@@ -235,29 +237,29 @@ def _make_overlay(width, height, number, chapter, options, layout, warnings):
             else:
                 drawing.drawString(left, layout["footer_baseline"], footer)
             drawing.addLiteral("EMC")
-        else:
-            box_width = min(layout["disclaimer_width"], available)
-            bottom, box_height = layout["disclaimer_bottom"], layout["disclaimer_height"]
-            padding, disclaimer_size = layout["disclaimer_padding"], layout["disclaimer_font_size"]
-            if bottom + box_height > height:
-                raise ValueError(f"Page {number}: the disclaimer falls outside the visible page.")
-            lines = _wrap_disclaimer(font, disclaimer_size, box_width - 2 * padding)
-            if disclaimer_size + (len(lines) - 1) * layout["disclaimer_leading"] > box_height - 2 * padding:
-                raise ValueError(f"Page {number}: the complete disclaimer does not fit. Increase disclaimer_height or supply a wider plain PDF.")
-            # Border is an artifact. Substantive disclaimer is a separate
-            # paragraph, never hidden as running furniture.
-            drawing.addLiteral("/Artifact BMC")
-            drawing.setStrokeColorRGB(1, 0, 0)
-            drawing.setLineWidth(layout["disclaimer_border_width"])
-            drawing.rect(left, bottom, box_width, box_height, stroke=1, fill=0)
-            drawing.addLiteral("EMC")
-            drawing.setStrokeColorRGB(0, 0, 0)
-            drawing.addLiteral("/P BMC")
-            drawing.setFont(font, disclaimer_size)
-            for index, line in enumerate(lines):
-                baseline = bottom + box_height - padding - disclaimer_size - index * layout["disclaimer_leading"]
-                drawing.drawString(left + padding, baseline, line)
-            drawing.addLiteral("EMC")
+    if options.disclaimer and number == 1:
+        box_width = min(layout["disclaimer_width"], available)
+        bottom, box_height = layout["disclaimer_bottom"], layout["disclaimer_height"]
+        padding, disclaimer_size = layout["disclaimer_padding"], layout["disclaimer_font_size"]
+        if bottom + box_height > height:
+            raise ValueError(f"Page {number}: the disclaimer falls outside the visible page.")
+        lines = _wrap_disclaimer(font, disclaimer_size, box_width - 2 * padding)
+        if disclaimer_size + (len(lines) - 1) * layout["disclaimer_leading"] > box_height - 2 * padding:
+            raise ValueError(f"Page {number}: the complete disclaimer does not fit. Increase disclaimer_height or supply a wider plain PDF.")
+        # Border is an artifact. Substantive disclaimer is a separate
+        # paragraph, never hidden as running furniture.
+        drawing.addLiteral("/Artifact BMC")
+        drawing.setStrokeColorRGB(1, 0, 0)
+        drawing.setLineWidth(layout["disclaimer_border_width"])
+        drawing.rect(left, bottom, box_width, box_height, stroke=1, fill=0)
+        drawing.addLiteral("EMC")
+        drawing.setStrokeColorRGB(0, 0, 0)
+        drawing.addLiteral("/P BMC")
+        drawing.setFont(font, disclaimer_size)
+        for index, line in enumerate(lines):
+            baseline = bottom + box_height - padding - disclaimer_size - index * layout["disclaimer_leading"]
+            drawing.drawString(left + padding, baseline, line)
+        drawing.addLiteral("EMC")
     if options.page_numbers and number > 1:
         if layout["page_number_baseline"] + size > height:
             raise ValueError(f"Page {number}: the page number falls outside the visible page.")
@@ -276,8 +278,9 @@ def format_pdf(input_path: str | Path, output_path: str | Path, chapter: Chapter
     """Write a copy; return pages, warnings, and output (absolute path).
 
     Raises ValueError for unsafe/unsupported input or invalid settings. Never
-    replaces an existing destination or modifies the original. Draft disclaimer
-    is included only with headers_footers. Page 1 never receives a number.
+    replaces an existing destination or modifies the original. The optional
+    disclaimer appears on page 1 independently of headers and page numbers.
+    Page 1 never receives a number.
     """
     source, destination = Path(input_path), Path(output_path)
     if source.resolve() == destination.resolve():
@@ -292,14 +295,17 @@ def format_pdf(input_path: str | Path, output_path: str | Path, chapter: Chapter
         raise ValueError("Choose a valid release stage.")
     if isinstance(options.year, bool) or not isinstance(options.year, int) or not 1900 <= options.year <= 2200:
         raise ValueError("Assessment year must be an integer between 1900 and 2200.")
-    if not options.headers_footers and not options.page_numbers:
-        raise ValueError("Select headers/footers, page numbers, or both.")
+    if not any((options.headers_footers, options.page_numbers, options.disclaimer)):
+        raise ValueError("Select headers/footers, page numbers, or disclaimer.")
+    if options.release_label is not None and (not isinstance(options.release_label, str) or not options.release_label.strip()):
+        raise ValueError("Release label cannot be empty.")
     if chapter.region not in FOOTERS:
         raise ValueError(f"Unknown region '{chapter.region}'. Use one of: {', '.join(FOOTERS)}.")
     if not isinstance(chapter.heading, str) or not chapter.heading.strip():
         raise ValueError("Chapter heading cannot be empty.")
     settings = _validated_layout(layout)
     _text_fits(chapter.heading, settings["font"])
+    _text_fits(options.meeting_label, settings["font"], "Release label")
     try:
         reader = PdfReader(source)
     except PdfReadError as exc:
@@ -310,14 +316,16 @@ def format_pdf(input_path: str | Path, output_path: str | Path, chapter: Chapter
         width, height, transform = _visible_geometry(page)
         overlay = _make_overlay(width, height, number, chapter, options, settings, warnings)
         page.merge_transformed_page(overlay, transform, over=True, expand=False)
-    if options.headers_footers and options.is_draft:
-        warnings.append("The draft disclaimer is readable text, but has not been connected to a document tag tree. Review its reading order and tagging before accessible publication.")
+    if options.disclaimer:
+        warnings.append("The disclaimer is readable text, but has not been connected to a document tag tree. Review its reading order and tagging before accessible publication.")
     if "/StructTreeRoot" in reader.root_object:
         warnings.append("Existing document tags were retained. Review accessibility after formatting; PDF/UA conformance is not certified.")
     writer.add_metadata({
         FORMATTER_MARKER: FORMATTER_VERSION,
         "/SAFEFormatterYear": str(options.year),
         "/SAFEFormatterStage": options.stage,
+        "/SAFEFormatterReleaseLabel": options.meeting_label,
+        "/SAFEFormatterDisclaimer": str(options.disclaimer).lower(),
         "/SAFEFormatterChapter": chapter.heading,
         "/SAFEFormatterSourceName": source.name,
     })
@@ -341,4 +349,8 @@ def format_pdf(input_path: str | Path, output_path: str | Path, chapter: Chapter
             if created:
                 destination.unlink(missing_ok=True)
             raise
-    return {"pages": len(reader.pages), "warnings": list(dict.fromkeys(warnings)), "output": str(destination.resolve())}
+    return {
+        "pages": len(reader.pages), "warnings": list(dict.fromkeys(warnings)),
+        "output": str(destination.resolve()), "release_label": options.meeting_label,
+        "disclaimer": options.disclaimer,
+    }

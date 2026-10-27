@@ -74,9 +74,12 @@ def main() -> None:
         if not source.is_dir():
             raise SystemExit(f"Build the app first; missing {source}")
         shutil.copytree(source, destination, dirs_exist_ok=True)
-    for directory in ("config", "examples"):
-        if (ROOT / directory).is_dir():
-            shutil.copytree(ROOT / directory, destination / directory)
+    # Local GUI preferences can contain user paths and are never distributed.
+    (destination / "config").mkdir()
+    for filename in ("chapters.csv", "layout.json", "catalog-source.md"):
+        shutil.copy2(ROOT / "config" / filename, destination / "config" / filename)
+    if (ROOT / "examples").is_dir():
+        shutil.copytree(ROOT / "examples", destination / "examples")
     for filename in ("README.md", "QUICK_START.md", "START HERE.txt"):
         if (ROOT / filename).is_file():
             shutil.copy2(ROOT / filename, destination / filename)

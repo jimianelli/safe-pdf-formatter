@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import platform
+import runpy
 import subprocess
 import sys
 import tempfile
@@ -14,6 +15,7 @@ from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "SAFE PDF Formatter"
+EXPECTED_VERSION = runpy.run_path(str(ROOT / "safe_pdf" / "__init__.py"))["__version__"]
 
 
 def main() -> None:
@@ -70,10 +72,34 @@ def main() -> None:
     report = json.loads(report_path.read_text(encoding="utf-8"))
     if not report.get("success") or not report.get("source_unchanged"):
         raise SystemExit(f"Standalone test did not pass: {report}")
+    if report.get("app_version") != EXPECTED_VERSION:
+        raise SystemExit(f"Standalone version {report.get('app_version')!r} differs from source version {EXPECTED_VERSION!r}.")
+    if not report.get("release_settings_checked"):
+        raise SystemExit("The standalone release-settings checks did not run.")
     if args.gui and not report.get("gui_checked"):
         raise SystemExit("The requested standalone GUI test did not run.")
+    source_commit = None
+    source_tree_dirty = None
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, timeout=10,
+        )
+        if commit.returncode == 0:
+            source_commit = commit.stdout.strip()
+            status = subprocess.run(
+                ["git", "status", "--porcelain", "--untracked-files=no"],
+                cwd=ROOT, capture_output=True, text=True, timeout=10,
+            )
+            if status.returncode == 0:
+                source_tree_dirty = bool(status.stdout.strip())
+    except (OSError, subprocess.TimeoutExpired):
+        pass
     verification = {
         "success": True,
+        "app_version": report["app_version"],
+        "release_settings_checked": True,
+        "source_commit": source_commit,
+        "source_tree_dirty": source_tree_dirty,
         "platform": platform.platform(),
         "machine": platform.machine(),
         "gui_checked": bool(report.get("gui_checked")),

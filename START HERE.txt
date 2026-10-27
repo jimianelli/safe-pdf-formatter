@@ -1,4 +1,10 @@
-SAFE PDF FORMATTER - WINDOWS
+SAFE PDF FORMATTER - MAC AND WINDOWS
+
+MAC (APPLE SILICON)
+Open the supplied ZIP, then open SAFE PDF Formatter.app in the extracted folder.
+Keep the adjacent config and examples folders with the app.
+
+WINDOWS (64-BIT PC)
 
 1. Right-click the supplied ZIP and choose Extract All.
 2. Open the extracted SAFE PDF Formatter-Windows-AMD64 folder.
@@ -13,8 +19,12 @@ Click Sample PDFs, then Preview selected. Use Previous and Next to review the
 four demonstration pages. These contain no scientific assessment data.
 
 YOUR DOCUMENTS
-Add plain PDFs, select the assessment year and release stage, and review the
-heading and region shown for each file. Use Edit selected details to add an
+Add plain PDFs, select the assessment year, and choose or type the Release.
+The presets are September Plan Team draft, November Plan Team draft, and Council.
+Council uses the former Final processing step. A release label you type is
+printed exactly as entered. Disclaimer is a separate checkbox, off by default;
+select it when you want the first-page disclaimer. Review the heading and
+region shown for each file. Use Edit selected details to add an
 unknown filename to the catalog. Choose a Save to folder you can write to,
 then click Process all PDFs. Results are saved in a new dated subfolder.
 Original PDFs are not modified.
@@ -25,7 +35,7 @@ and click Reload. Layout settings changes spacing and typography. The catalog
 is an editable local snapshot; there is no automatic Google Sheets connection.
 
 PASSING IT ON
-Send the whole ZIP. Do not send just the EXE. Keep a separate copy of any
+Send the whole ZIP for the recipient's platform. Keep a separate copy of any
 customized chapter CSV and layout settings before replacing the app folder.
 
 This test release is unsigned. Managed Windows computers may require IT to

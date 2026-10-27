@@ -4,8 +4,7 @@ from dataclasses import dataclass
 STAGES = {
     "september": "September Plan Team draft",
     "november": "November Plan Team draft",
-    "council": "Council draft",
-    "final": "Final",
+    "final": "Council",
 }
 
 FOOTERS = {
@@ -36,16 +35,15 @@ class FormatOptions:
     stage: str = "september"
     headers_footers: bool = True
     page_numbers: bool = True
+    disclaimer: bool = False
+    release_label: str | None = None
 
     @property
     def meeting_label(self):
+        if self.release_label is not None:
+            return self.release_label
         return {
             "september": f"September {self.year} Plan Team Draft",
             "november": f"November {self.year} Plan Team Draft",
-            "council": f"November {self.year} Council Draft",
             "final": f"December {self.year}",
         }[self.stage]
-
-    @property
-    def is_draft(self):
-        return self.stage != "final"

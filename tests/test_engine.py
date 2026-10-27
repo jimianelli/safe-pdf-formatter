@@ -16,7 +16,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen.canvas import Canvas
 
 from safe_pdf.engine import DEFAULT_LAYOUT, FORMATTER_MARKER, format_pdf, load_layout
-from safe_pdf.models import Chapter, DISCLAIMER, FOOTERS, FormatOptions
+from safe_pdf.models import Chapter, DISCLAIMER, FOOTERS, FormatOptions, STAGES
 
 
 def text_positions(page):
@@ -67,7 +67,7 @@ class EngineTests(unittest.TestCase):
         return PdfReader(target), result
 
     def test_draft_content_and_numbering(self):
-        reader, result = self.format()
+        reader, result = self.format(options=FormatOptions(disclaimer=True))
         self.assertEqual(result["pages"], 3)
         self.assertEqual(len(reader.pages), 3)
         texts = [page.extract_text() for page in reader.pages]
@@ -84,23 +84,75 @@ class EngineTests(unittest.TestCase):
         self.assertIn(FOOTERS["BSAI"], texts[1])
         self.assertTrue(any("disclaimer" in warning for warning in result["warnings"]))
 
+    def test_disclaimer_is_off_by_default(self):
+        reader, result = self.format()
+        for page in reader.pages:
+            self.assertNotIn("pre-dissemination", page.extract_text())
+            self.assertIn(FOOTERS["BSAI"], page.extract_text())
+        self.assertEqual(result["warnings"], [])
+        self.assertFalse(result["disclaimer"])
+        self.assertEqual(reader.metadata["/SAFEFormatterDisclaimer"], "false")
+
+    def test_disabled_disclaimer_does_not_constrain_header_space(self):
+        reader, _ = self.format(layout={"disclaimer_height": 800})
+        self.assertIn("September 2026 Plan Team Draft", reader.pages[0].extract_text())
+        with self.assertRaisesRegex(ValueError, "too short"):
+            self.format(options=FormatOptions(disclaimer=True), layout={"disclaimer_height": 800},
+                        output="disclaimer-too-tall.pdf")
+        self.assertFalse((self.folder / "disclaimer-too-tall.pdf").exists())
+
     def test_all_release_labels_and_final_first_page_footer(self):
         source = self.source()
         expected = {
             "september": "September 2024 Plan Team Draft",
             "november": "November 2024 Plan Team Draft",
-            "council": "November 2024 Council Draft",
             "final": "December 2024",
         }
+        self.assertEqual(list(STAGES.values()), ["September Plan Team draft", "November Plan Team draft", "Council"])
         for stage, label in expected.items():
             with self.subTest(stage=stage):
                 reader, _ = self.format(source, FormatOptions(year=2024, stage=stage), output=stage + ".pdf")
                 text = reader.pages[0].extract_text()
                 self.assertIn(label, text)
                 self.assertNotIn("Page 1", text)
-                if stage == "final":
-                    self.assertIn(FOOTERS["BSAI"], text)
-                    self.assertNotIn("pre-dissemination", text)
+                self.assertIn(FOOTERS["BSAI"], text)
+                self.assertNotIn("pre-dissemination", text)
+
+    def test_custom_release_label_is_used_verbatim_and_recorded(self):
+        label = "October 2026 Council review"
+        reader, result = self.format(options=FormatOptions(stage="final", release_label=label))
+        for page in reader.pages:
+            self.assertIn(label, page.extract_text())
+            self.assertNotIn("December 2026", page.extract_text())
+        self.assertEqual(reader.metadata["/SAFEFormatterStage"], "final")
+        self.assertEqual(reader.metadata["/SAFEFormatterReleaseLabel"], label)
+        self.assertEqual(result["release_label"], label)
+        self.assertIn(FOOTERS["BSAI"], reader.pages[0].extract_text())
+
+    def test_disclaimer_is_independent_for_every_release_and_option_combination(self):
+        source = self.source()
+        for stage in STAGES:
+            for headers in (False, True):
+                for numbers in (False, True):
+                    for disclaimer in (False, True):
+                        if not any((headers, numbers, disclaimer)):
+                            continue
+                        with self.subTest(stage=stage, headers=headers, numbers=numbers, disclaimer=disclaimer):
+                            options = FormatOptions(stage=stage, headers_footers=headers,
+                                                    page_numbers=numbers, disclaimer=disclaimer)
+                            name = f"{stage}-{headers}-{numbers}-{disclaimer}.pdf"
+                            reader, result = self.format(source, options, output=name)
+                            first, second, third = [page.extract_text() for page in reader.pages]
+                            self.assertEqual("pre-dissemination" in first, disclaimer)
+                            self.assertNotIn("pre-dissemination", second + third)
+                            self.assertEqual(options.meeting_label in first, headers)
+                            self.assertEqual(FOOTERS["BSAI"] in first, headers and not disclaimer)
+                            self.assertEqual(FOOTERS["BSAI"] in second, headers)
+                            self.assertNotIn("Page 1", first)
+                            self.assertEqual("Page 2" in second, numbers)
+                            self.assertEqual("Page 3" in third, numbers)
+                            self.assertEqual(any("disclaimer" in warning for warning in result["warnings"]), disclaimer)
+                            self.assertEqual(reader.metadata["/SAFEFormatterDisclaimer"], str(disclaimer).lower())
 
     def test_all_regional_footer_wording(self):
         source = self.source()
@@ -179,7 +231,7 @@ class EngineTests(unittest.TestCase):
             self.assertEqual(list(link["/Rect"]), [80, 200, 280, 218])
 
     def test_artifacts_and_disclaimer_are_separate(self):
-        reader, _ = self.format()
+        reader, _ = self.format(options=FormatOptions(disclaimer=True))
         for index, page in enumerate(reader.pages):
             stack, stamps, disclaimers, body = [], [], [], []
             for operands, operator in page.get_contents().operations:
@@ -328,13 +380,21 @@ class EngineTests(unittest.TestCase):
 
     def test_invalid_options_and_missing_glyphs(self):
         source = self.source()
-        for options in [FormatOptions(year=1800), FormatOptions(stage="not-a-stage"), FormatOptions(headers_footers=False, page_numbers=False)]:
+        for options in [FormatOptions(year=1800), FormatOptions(stage="not-a-stage"), FormatOptions(stage="council"), FormatOptions(headers_footers=False, page_numbers=False)]:
             with self.subTest(options=options), self.assertRaises(ValueError):
                 self.format(source, options)
         with self.assertRaisesRegex(ValueError, "not supported"):
             self.format(source, heading="Pollock 🐟")
         with self.assertRaisesRegex(ValueError, "single line"):
             self.format(source, heading="Pollock\nChapter")
+
+    def test_invalid_custom_release_labels_leave_no_output(self):
+        source = self.source()
+        for label, message in [("", "empty"), ("   ", "empty"), (123, "empty"),
+                               ("October\nCouncil", "single line"), ("October 🐟", "not supported")]:
+            with self.subTest(label=label), self.assertRaisesRegex(ValueError, message):
+                self.format(source, FormatOptions(stage="final", release_label=label))
+            self.assertFalse((self.folder / "result.pdf").exists())
 
 
 if __name__ == "__main__":

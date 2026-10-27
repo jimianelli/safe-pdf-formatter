@@ -1,4 +1,5 @@
 # Build on each target operating system; PyInstaller does not cross-compile.
+import runpy
 import sys
 from pathlib import Path
 
@@ -6,7 +7,12 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 project = Path(SPECPATH)
 name = "SAFE PDF Formatter"
-datas = [(str(project / "config"), "config"), (str(project / "examples"), "examples")]
+version = runpy.run_path(str(project / "safe_pdf" / "__init__.py"))["__version__"]
+datas = [(str(project / "examples"), "examples")]
+datas += [
+    (str(project / "config" / filename), "config")
+    for filename in ("chapters.csv", "layout.json", "catalog-source.md")
+]
 datas += collect_data_files("reportlab")
 datas += collect_data_files("pypdfium2")
 datas += collect_data_files("pypdfium2_raw")
@@ -53,8 +59,8 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleName": name,
             "CFBundleDisplayName": name,
-            "CFBundleShortVersionString": "0.1.0",
-            "CFBundleVersion": "1",
+            "CFBundleShortVersionString": version,
+            "CFBundleVersion": version,
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "11.0",
         },

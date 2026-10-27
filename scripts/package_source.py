@@ -1,9 +1,11 @@
 """Create the editable project ZIP without environments or user settings."""
 from pathlib import Path
+import runpy
 from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
-DESTINATION = ROOT / "release" / "SAFE-PDF-Formatter-source-v0.1.0.zip"
+VERSION = runpy.run_path(str(ROOT / "safe_pdf" / "__init__.py"))["__version__"]
+DESTINATION = ROOT / "release" / f"SAFE-PDF-Formatter-source-v{VERSION}.zip"
 TOP_LEVEL = (
     "app.py", "README.md", "QUICK_START.md", "START HERE.txt", "requirements.txt",
     "requirements-build.txt", "SAFE PDF Formatter.spec", ".gitignore", ".gitattributes",

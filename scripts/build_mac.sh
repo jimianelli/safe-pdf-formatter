@@ -17,8 +17,9 @@ if [[ "${SAFE_FORMATTER_SKIP_INSTALL:-0}" != "1" ]]; then
   fi
   .venv/bin/python -m pip install -r requirements-build.txt
 fi
+SAFE_GUI_TEST=1 .venv/bin/python -m unittest discover -s tests -v
 .venv/bin/python -m PyInstaller --noconfirm --clean \
   --workpath build/pyinstaller --distpath dist "SAFE PDF Formatter.spec"
 .venv/bin/python scripts/package_release.py
-.venv/bin/python scripts/verify_build.py
+.venv/bin/python scripts/verify_build.py --gui --from-zip
 echo "Built release/SAFE PDF Formatter-macOS-$(uname -m)"

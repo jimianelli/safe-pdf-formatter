@@ -88,12 +88,11 @@ class FormatterApp:
         self.preview_revision = 0
         today = dt.date.today()
         self.year = tk.StringVar(value=str(today.year))
-        stage = "september" if today.month < 10 else "november" if today.month < 11 or today.day < 15 else "council"
-        if today.month == 12 and today.day >= 10:
-            stage = "final"
+        stage = "september" if today.month < 10 else "november" if (today.month, today.day) < (11, 15) else "final"
         self.stage = tk.StringVar(value=STAGES[stage])
         self.add_headers = tk.BooleanVar(value=True)
         self.add_numbers = tk.BooleanVar(value=True)
+        self.add_disclaimer = tk.BooleanVar(value=False)
         self.output = tk.StringVar(value="")
         self.status = tk.StringVar(value="Add plain PDFs, choose a release, then preview or process.")
         self.page_label = tk.StringVar(value="No preview")
@@ -134,12 +133,19 @@ class FormatterApp:
         ttk.Label(outer, text="Finish plain assessment PDFs with consistent headers, footers and page numbers.", style="Sub.TLabel").grid(row=1, column=0, sticky="w", pady=(5, 16))
         options = ttk.LabelFrame(outer, text="1  Release settings", padding=12)
         options.grid(row=2, column=0, sticky="ew")
+        options.columnconfigure(3, weight=1)
         ttk.Label(options, text="Year").grid(row=0, column=0, sticky="w")
         ttk.Spinbox(options, from_=1990, to=2100, textvariable=self.year, width=7).grid(row=0, column=1, padx=(7, 20))
         ttk.Label(options, text="Release").grid(row=0, column=2)
-        ttk.Combobox(options, textvariable=self.stage, values=list(STAGES.values()), state="readonly", width=27).grid(row=0, column=3, padx=(7, 24))
-        ttk.Checkbutton(options, text="Headers, footers & disclaimer", variable=self.add_headers).grid(row=0, column=4, padx=(0, 16))
-        ttk.Checkbutton(options, text="Page numbers", variable=self.add_numbers).grid(row=0, column=5)
+        self.release_combo = ttk.Combobox(options, textvariable=self.stage, values=list(STAGES.values()), width=35)
+        self.release_combo.grid(row=0, column=3, sticky="ew", padx=(7, 0))
+        choices = ttk.Frame(options)
+        choices.grid(row=1, column=0, columnspan=4, sticky="w", pady=(10, 0))
+        ttk.Checkbutton(choices, text="Headers & footers", variable=self.add_headers).pack(side="left", padx=(0, 16))
+        ttk.Checkbutton(choices, text="Page numbers", variable=self.add_numbers).pack(side="left", padx=(0, 16))
+        self.disclaimer_check = ttk.Checkbutton(choices, text="Disclaimer", variable=self.add_disclaimer)
+        self.disclaimer_check.pack(side="left", padx=(0, 20))
+        ttk.Label(choices, text="Custom release text appears exactly as entered.", style="Sub.TLabel").pack(side="left")
         panes = ttk.Panedwindow(outer, orient="horizontal")
         panes.grid(row=3, column=0, sticky="nsew", pady=14)
         left = ttk.Frame(panes)
@@ -205,7 +211,7 @@ class FormatterApp:
         self.progress = ttk.Progressbar(outer, mode="indeterminate")
         self.progress.grid(row=6, column=0, sticky="ew")
         ttk.Label(outer, textvariable=self.status, style="Sub.TLabel", wraplength=900).grid(row=7, column=0, sticky="w", pady=(8, 0))
-        for variable in (self.year, self.stage, self.add_headers, self.add_numbers):
+        for variable in (self.year, self.stage, self.add_headers, self.add_numbers, self.add_disclaimer):
             variable.trace_add("write", self.invalidate_preview)
 
     def _load_settings(self):
@@ -352,9 +358,17 @@ class FormatterApp:
             raise ValueError("Enter a four-digit assessment year.") from None
         if not 1990 <= year <= 2100:
             raise ValueError("Choose an assessment year between 1990 and 2100.")
-        if not self.add_headers.get() and not self.add_numbers.get():
-            raise ValueError("Select headers and footers, page numbers, or both.")
-        return FormatOptions(year, next(k for k, v in STAGES.items() if v == self.stage.get()), self.add_headers.get(), self.add_numbers.get())
+        release = self.stage.get().strip()
+        if not release:
+            raise ValueError("Choose a release or enter custom release text.")
+        if not any((self.add_headers.get(), self.add_numbers.get(), self.add_disclaimer.get())):
+            raise ValueError("Select headers and footers, page numbers, or disclaimer.")
+        stage = next((k for k, v in STAGES.items() if v == release), None)
+        return FormatOptions(
+            year=year, stage=stage or "final",
+            headers_footers=self.add_headers.get(), page_numbers=self.add_numbers.get(),
+            disclaimer=self.add_disclaimer.get(), release_label=None if stage else release,
+        )
 
     def _set_busy(self, value):
         self.busy = value
@@ -526,7 +540,7 @@ class FormatterApp:
                 suffix += 1
             destination.mkdir()
             # Record the exact choices used for this batch.
-            (destination / "settings.json").write_text(json.dumps({"app_version": __version__, "year": options.year, "stage": options.stage, "headers_footers": options.headers_footers, "page_numbers": options.page_numbers, "layout": layout, "catalog": str(self.catalog_path)}, indent=2))
+            (destination / "settings.json").write_text(json.dumps({"app_version": __version__, "year": options.year, "stage": options.stage, "release_label": options.meeting_label, "headers_footers": options.headers_footers, "page_numbers": options.page_numbers, "disclaimer": options.disclaimer, "layout": layout, "catalog": str(self.catalog_path)}, indent=2))
             write_catalog(destination / "chapters-used.csv", [c for _, c in jobs])
         except Exception as exc:
             messagebox.showerror("Check the batch", str(exc))

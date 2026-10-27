@@ -1,7 +1,8 @@
 # SAFE PDF Formatter
 
-A local desktop application for adding SAFE headers, footers, draft disclaimers,
-and page numbers to plain PDFs. Version 0.1 is a prototype for layout testing.
+A local desktop application for adding SAFE headers, footers, optional disclaimers,
+and page numbers to plain PDFs. Version 0.2 supports editable release labels and
+an independent disclaimer option.
 
 ## Start on a Mac
 
@@ -11,8 +12,11 @@ included; Python and Acrobat are not required.
 
 1. Click **Sample PDFs** to load the included four-page demonstration, or choose
    **Add PDFs…** / **Add folder…** for your own plain documents.
-2. Select the **Year** and **Release**. These choices determine the printed label
-   and whether the first-page disclaimer is included.
+2. Select the **Year** and choose or type the **Release**. The presets are
+   **September Plan Team draft**, **November Plan Team draft**, and **Council**.
+   Council uses the former Final processing step. A typed release label is
+   printed exactly as entered. Select **Disclaimer** to add the first-page
+   disclaimer; it is off by default for every release.
 3. Review the chapter heading and region beside each filename. For an unknown
    filename, select it and click **Edit selected details…**. Saving adds its
    details to the selected chapter CSV.
@@ -42,7 +46,7 @@ the path of the catalog it is using. Filenames match without regard to letter
 case; duplicate names that differ only in case are rejected.
 
 Region codes select the footer wording: `GOA`, `BSAI`, `AK`, `ECO`, or `ECON`.
-The year and release stage are selected in the app, not in the CSV.
+The year and release label are selected or edited in the app, not in the CSV.
 
 The initial catalog combines the established headings from `menu.js` with a
 documented filename alias from the [SAFE Chapter status worksheet](https://docs.google.com/spreadsheets/d/1bMCdYBVF-ZpJMp91ZJ2No5sOoXrWoKhrwEcDf5JuuCE/edit?gid=575468903#gid=575468903).
@@ -56,14 +60,18 @@ Use **Layout settings…** to adjust the local `config/layout.json`. Dimensions
 are in PDF points (72 points = 1 inch). Save and create a new preview to see the
 change. Changing the CSV or layout does not require rebuilding the application.
 
-The default appearance follows the active behavior of the supplied Acrobat
-script:
+The page layout follows the supplied Acrobat script, with release labels and
+the disclaimer controlled in the app:
 
 - Meeting label and chapter heading appear on every page and alternate sides.
 - Headers are underlined; the SAFE footer alternates sides.
 - Page 1 is always unnumbered. The second physical page reads **Page 2**.
-- Draft page 1 has the exact pre-dissemination disclaimer in a red box, replacing
-  the regional footer. Final page 1 has the regional footer and no disclaimer.
+- **Headers & footers**, **Page numbers**, and **Disclaimer** are independent
+  options. Headers and footers and page numbers start selected; Disclaimer starts
+  unselected.
+- Selecting Disclaimer adds the exact pre-dissemination disclaimer in a red box
+  on page 1, replacing that page's regional footer when headers and footers are
+  enabled. With Disclaimer unselected, page 1 retains its regional footer.
 - Portrait and landscape pages use the established Letter-size margins, adapted
   to visible page dimensions and rotation.
 
@@ -95,10 +103,12 @@ installation is needed. See **START HERE.txt** for staff instructions. The
 unsigned test release may require approval through your organization's usual
 software process on managed computers.
 
-The same application source is built natively on each platform. The `scripts`
-folder contains the Windows build script; `.github/workflows/build.yml` runs
-tests and creates a portable ZIP on a Windows build machine. The validation
-report accompanying a build records what was actually tested.
+The same application source is built natively on each platform. The macOS ZIP
+targets Apple silicon (`arm64`); the Windows ZIP targets 64-bit PCs (`AMD64`).
+The `scripts` folder contains native build scripts. The GitHub Actions workflow
+builds both platforms by default, runs PDF and desktop GUI tests, then verifies
+the extracted ZIP and bundled GUI with developer Python removed from the app's
+environment. Each build includes a SHA-256 checksum and verification evidence.
 
 ## For maintaining the application
 
@@ -120,3 +130,21 @@ The self-test formats the bundled sample, checks source preservation, renders
 a preview, and checks Tk/Pillow integration. `--no-gui` skips the display check
 when running without a desktop session. Native GUI validation must still be run
 before distributing a platform build.
+
+Build and verify the macOS ZIP from a desktop session:
+
+```sh
+bash scripts/build_mac.sh
+```
+
+Build and verify the Windows ZIP in PowerShell on a Windows desktop with
+Python 3.12 installed:
+
+```powershell
+.\scripts\build_windows.ps1
+```
+
+To build both platforms on GitHub, run **Build standalone PDF formatter** from
+the Actions tab and choose **Both**. Download the platform artifacts after both
+jobs succeed. Distribute the ZIPs with their matching SHA-256 files; the source
+ZIP can be generated with `python scripts/package_source.py`.
